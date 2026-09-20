@@ -40,7 +40,6 @@ def evaluate(model, loader, device):
 
     return {gen: correct.get(gen, 0) / total[gen] for gen in total}
 
-
 def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
     total_loss = 0.0
@@ -72,9 +71,8 @@ def main():
     # train/eval curves are underfitting.
     epochs = 5
     use_lora = True # False for frozen linear-probe baseline (Ohja et al. 2023)
-    use_freq_branch = True # fuse YCbCr DFT+DWT frequency branch into the CLIP model
-    checkpoint_path = f"checkpoint_lora_{'freq' if use_freq_branch else 'lora'}.pt" if use_lora else "checkpoint_frozen.pt"
-    checkpoint_dir = f"checkpoints_lora_{'freq' if use_freq_branch else 'lora'}" if use_lora else "checkpoints_frozen"
+    checkpoint_path = "checkpoint_lora.pt" if use_lora else "checkpoint_frozen.pt"
+    checkpoint_dir = "checkpoints_lora" if use_lora else "checkpoints_frozen"
     os.makedirs(checkpoint_dir, exist_ok=True)
     resume = False # True to resume from previous checkpoint
 
@@ -86,7 +84,7 @@ def main():
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    model = CLIPLoRADetector(use_lora=use_lora, use_freq_branch=use_freq_branch).to(device)
+    model = CLIPLoRADetector(use_lora=use_lora).to(device)
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=1e-4)
     criterion = nn.CrossEntropyLoss()
@@ -137,8 +135,8 @@ def main():
                     "best_mean_bal_acc": best_mean_bal_acc,
                 }, checkpoint_path)
                 print(f" - New best - saved {checkpoint_path}")
-        
-        # Checkpoint every epoch regardless, can't be too safe
+
+        # Checkpoint every epoch regardless
         epoch_ckpt = os.path.join(checkpoint_dir, f"epoch_{epoch}.pt")
         torch.save({
             "model": model.state_dict(),
