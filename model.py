@@ -53,4 +53,8 @@ if __name__ == "__main__":
 
     assert loss.requires_grad, "loss disconnected from LoRA params; check target_modules"
     loss.backward()
-    print(f"Forward+backward pass successful. logits.shape={logits.shape}")
+    print(f"Forward + backward pass successful. logits.shape={logits.shape}")
+
+"""
+Forward + backward pass successful. logits.shape=torch.Size([4, 2])
+"""
