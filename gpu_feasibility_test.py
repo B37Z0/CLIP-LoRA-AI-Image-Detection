@@ -1,5 +1,7 @@
 """
-GPU / environment feasibility test. Entirely AI-generated.
+GPU / environment feasibility test. 
+
+This script is entirely AI-generated.
 
 Run this on your local machine (Ubuntu 24.04, ROCm 7.2.4, `ml` conda env),
 not in a sandbox. It checks:

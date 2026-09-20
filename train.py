@@ -1,9 +1,11 @@
 """
-Training loop for the CLIP-LoRA detector.
+Training loop for the CLIP-LoRA AI-image detector.
 
 Reports per-generator accuracy on eval instead of single number.
-The test split is ~78% real, so direct accuracy would be misleading.
+The Tiny-GenImage test split is ~78% real, so direct accuracy would be misleading.
 """
+
+import os
 
 import torch
 import torch.nn as nn
@@ -38,7 +40,6 @@ def evaluate(model, loader, device):
 
     return {gen: correct.get(gen, 0) / total[gen] for gen in total}
 
-
 def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
     total_loss = 0.0
@@ -60,6 +61,7 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
 
 
 def main():
+    torch.manual_seed(0)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     held_out = ["Midjourney", "VQDM"]
     # N=16 is comfortably below the measured ~4.85GB/batch-8.
@@ -67,7 +69,12 @@ def main():
     batch_size = 16
     # LoRA on a frozen backbone converges FAST. Raise only if
     # train/eval curves are underfitting.
-    epochs = 3
+    epochs = 5
+    use_lora = True # False for frozen linear-probe baseline (Ohja et al. 2023)
+    checkpoint_path = "checkpoint_lora.pt" if use_lora else "checkpoint_frozen.pt"
+    checkpoint_dir = "checkpoints_lora" if use_lora else "checkpoints_frozen"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    resume = False # True to resume from previous checkpoint
 
     transform = build_clip_transform()
     full_train = TinyGenImageDataset(split="train", transform=transform)
@@ -77,30 +84,71 @@ def main():
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    model = CLIPLoRADetector().to(device)
+    model = CLIPLoRADetector(use_lora=use_lora).to(device)
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=1e-4)
     criterion = nn.CrossEntropyLoss()
 
-    for epoch in range(1, epochs + 1):
+    start_epoch = 1 # 1 if not resuming
+    best_mean_bal_acc = -1.0
+
+    if resume and os.path.exists(checkpoint_path):
+        ckpt = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optimizer"])
+        start_epoch = ckpt["epoch"] + 1
+        best_mean_bal_acc = ckpt["best_mean_bal_acc"]
+        print(f"Resumed from {checkpoint_path} (epoch {ckpt['epoch']}, "
+              f"best bal acc {best_mean_bal_acc:.3f})")
+
+    for epoch in range(start_epoch, epochs + 1):
         train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
         eval_results = evaluate(model, test_loader, device)
-
-        print(f"\nEpoch {epoch}/{epochs} - train loss: {train_loss:.4f}")
+ 
+        print(f"\nEpoch {epoch}/{epochs} — train loss: {train_loss:.4f}")
         for gen, acc in eval_results.items():
-            print(f" - {gen}: {acc:.3f}")
-
+            print(f"  {gen}: {acc:.3f}")
+ 
         # per-generator balanced acc = (real-recall + generator fake-recall) / 2
         # The raw group sizes (14000 real vs 2000 per generator) make a pooled number useless.
+        
+        # UPDATED: use this number to select the checkpoint. Train loss and even the raw
+        # held-out accuracy can improve/decline in ways that seemingly don't track
+        # actual generalization (see epoch-by-epoch Midjourney drift in prev results)
+        bal_accs = []
         if "Real" in eval_results:
             for gen in held_out:
                 if gen in eval_results:
                     bal_acc = (eval_results["Real"] + eval_results[gen]) / 2
-                    print(f"  Balanced acc (Real vs {gen}): {bal_acc:.3f}")
+                    print(f" - Balanced acc (Real vs {gen}): {bal_acc:.3f}")
+                    bal_accs.append(bal_acc)
+ 
+        if bal_accs:
+            mean_bal_acc = sum(bal_accs) / len(bal_accs)
+            print(f" - Mean balanced acc: {mean_bal_acc:.3f}")
+            if mean_bal_acc > best_mean_bal_acc:
+                best_mean_bal_acc = mean_bal_acc
+                torch.save({
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "epoch": epoch,
+                    "best_mean_bal_acc": best_mean_bal_acc,
+                }, checkpoint_path)
+                print(f" - New best - saved {checkpoint_path}")
 
-    torch.save(model.state_dict(), "checkpoint.pt")
-    print("\nSaved checkpoint.pt")
-
-
+        # Checkpoint every epoch regardless
+        epoch_ckpt = os.path.join(checkpoint_dir, f"epoch_{epoch}.pt")
+        torch.save({
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "epoch": epoch,
+            "mean_bal_acc": mean_bal_acc if bal_accs else None,
+            "eval_results": eval_results,
+        }, epoch_ckpt)
+        print(f" - Saved {epoch_ckpt}")
+ 
+    print(f"\nBest mean balanced acc: {best_mean_bal_acc:.3f} (checkpoint: {checkpoint_path})")
+ 
+ 
 if __name__ == "__main__":
     main()
