@@ -74,10 +74,10 @@ def main():
     batch_size = 16
     # LoRA on a frozen backbone converges FAST. Raise only if
     # train/eval curves are underfitting.
-    epochs = 5
+    epochs = 6
     use_lora = True # False for frozen linear-probe baseline (Ohja et al. 2023)
-    use_freq_branch = True # fuse the YCbCr DFT+DWT frequency branch into the CLIP model
-    null_space = True # LoRA-Null: constrain adaptation away from the frozen weight's top singular directions
+    use_freq_branch = True # True to fuse the YCbCr DFT+DWT frequency branch into the CLIP model
+    null_space = True # True for LoRA-Null
     checkpoint_path = (
         f"checkpoint_lora{'_null' if null_space else ''}{'_freq' if use_freq_branch else ''}.pt"
         if use_lora else "checkpoint_frozen.pt"

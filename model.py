@@ -194,4 +194,22 @@ if __name__ == "__main__":
             )
 
         print(f"[{label}] Forward + backward pass successful. logits.shape={logits.shape}\n")
-    
+
+"""
+[LoRA] Trainable params: 787,970 / 304,754,178 (0.259%)
+[LoRA] Forward + backward pass successful. logits.shape=torch.Size([4, 2])
+
+[frozen linear-probe] Trainable params: 1,538 / 303,967,746 (0.001%)
+[frozen linear-probe] Forward + backward pass successful. logits.shape=torch.Size([4, 2])
+
+[LoRA + frequency branch] Trainable params: 824,898 / 304,791,106 (0.271%)
+[LoRA + frequency branch] Forward + backward pass successful. logits.shape=torch.Size([4, 2])
+
+[LoRA-Null] Trainable params: 787,970 / 304,754,178 (0.259%)
+[LoRA-Null] Max protected-subspace component before projection: 0.027703, after: 0.000000
+[LoRA-Null] Forward + backward pass successful. logits.shape=torch.Size([4, 2])
+
+[LoRA-Null + frequency branch] Trainable params: 824,898 / 304,791,106 (0.271%)
+[LoRA-Null + frequency branch] Max protected-subspace component before projection: 0.028441, after: 0.000000
+[LoRA-Null + frequency branch] Forward + backward pass successful. logits.shape=torch.Size([4, 2])
+"""
