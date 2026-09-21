@@ -35,11 +35,11 @@ Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by c
 | Configuration | Mean Balanced Acc | Midjourney Balanced Acc | VQDM Balanced Acc |
 |---|---|---|---|
 | Dual-stream CNN (baseline) | 0.642 | 0.649 | 0.634 |
-| Frozen CLIP linear probe | 0.853 | 0.844 | 0.863 |
+| Frozen CLIP linear probe | 0.853 | **0.844** | 0.863 |
 | CLIP + LoRA (r=8) | 0.843* | 0.750* | 0.936* |
 | CLIP + LoRA + frequency branch | 0.835* | 0.732* | 0.937* |
 | CLIP + LoRA-Null (r=8) | 0.857 | 0.751 | **0.964** |
-| **CLIP + LoRA-Null + frequency branch** | **0.858** | **0.770** | 0.946 |
+| **CLIP + LoRA-Null + frequency branch** | **0.858** | 0.770 | 0.946 |
 
 *Plain-LoRA and LoRA+frequency results vary noticeably across epochs/runs - see [Findings](#findings) below.
 
