@@ -36,10 +36,10 @@ Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by c
 |---|---|---|---|
 | Dual-stream CNN (baseline) | 0.642 | 0.649 | 0.634 |
 | Frozen CLIP linear probe | 0.853 | 0.844 | 0.863 |
-| CLIP + LoRA (r=8) | 0.843* | 0.72–0.75* | 0.87–0.95* |
-| CLIP + LoRA + frequency branch | 0.835* | 0.66–0.73* | 0.87–0.96* |
-| CLIP + LoRA-Null (r=8) | 0.857 | 0.75 | 0.964 |
-| **CLIP + LoRA-Null + frequency branch** | **0.858** | **0.770** | 0.946 |
+| CLIP + LoRA (r=8) | 0.843* | 0.750* | 0.936* |
+| CLIP + LoRA + frequency branch | 0.835* | 0.732* | 0.937* |
+| CLIP + LoRA-Null (r=8) | 0.857 | 0.751 | 0.964 |
+| **CLIP + LoRA-Null + frequency branch** | **0.858** | 0.770 | 0.946 |
 
 *Plain-LoRA and LoRA+frequency results vary noticeably across epochs/runs - see [Findings](#findings) below.
 
@@ -48,7 +48,7 @@ Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by c
 - **CLIP-based approaches dramatically outperform training a detector from scratch.** Every single CLIP configuration easily beats the dual-stream CNN baseline by 20+ points of balanced accuracy, readily confirming the literature's claim for this specific generalization-focused evaluation.
 - **Naive LoRA adaptation rapidly overfits to training-generator-specific artifacts.** Across every run, training loss collapses toward zero within 2–3 epochs while held-out Midjourney accuracy degrades or becomes noisy. These are classic signs of the model overfitting to narrow, generator-specific shortcuts rather than learning generalizable representations. Standard regularization (LoRA dropout, lower rank) did not fix this to any notable degree.
 - **LoRA-Null (SVD-based null-space projection) measurably helps.** Implementing LoRA-Null achieved a clean and reproducible result (0.857) with more stable early-training generalization than the basic LoRA variant. The overfitting problem was not solved - overfitting returned after epoch 2-3 - likely because constraining ~32 of 1024 weight dimensions still leaves the rank-8 update plenty of room to memorize elsewhere.
-- **The frequency branch has a negative or marginal effect.** Adding the frequency branch to the LoRA-Null variant improved Midjourney balanced accuracy by +2 points (0.751 -> 0.770) while slightly hurting VQDM (0.964 -> 0.946), resulting in essentially the same mean balanced accuracy (0.858 vs 0.857). Under plain LoRA (without null-space projection), the frequency branch showed no benefit at all. This suggests the frequency features may only contribute meaningfully when the backbone's adaptation is constrained enough to not overfit before the randomly-initialized frequency CNN can learn useful filters.
+- **The frequency branch has a negative or marginal effect.** Adding the frequency branch to the LoRA-Null variant improved Midjourney balanced accuracy by +2 points (0.751 -> 0.770) while hurting VQDM about the same (0.964 -> 0.946), resulting in essentially the same mean balanced accuracy (0.858 vs 0.857). Under plain LoRA (without null-space projection), the frequency branch effects were more negative than not. An interpretation of these effects is that the frequency features may only contribute meaningfully when the backbone's adaptation is constrained enough to not overfit before the randomly-initialized frequency CNN can learn useful filters.
 - **Generalization difficulty is very much generator-dependent, not uniform.** Midjourney is consistently and easily the hardest of the held-out generators across every architecture and configuration tried (accuracy regularly stuck in the 0.3–0.55 range), while VQDM generalizes well and improves steadily under adaptation until it begins overfitting. This is consistent with literature suggesting closed-source commercial generators (Midjourney, DALL·E) leave different or weaker artifacts than open research diffusion models, making them harder universal detection targets.
 
 ## Limitations & Next Steps
@@ -77,3 +77,4 @@ train_baseline_cnn.py     # Training loop for the dual-stream CNN baseline
 - Hu, E. J. et al. (2021). *LoRA: Low-Rank Adaptation of Large Language Models.* [arXiv:2106.09685](https://arxiv.org/abs/2106.09685)
 - Wang, G. et al. (2025). *LoRA-Null: Zero-Cost Adapting CLIP for Few-Shot Image Classification.* [arXiv:2503.02659](https://arxiv.org/abs/2503.02659)
 - Ma, Z. et al. (2025). *AIGI Holmes: A Multi-Branch Pipeline for Reliable AI-Generated Image Detection.* [arXiv:2507.02664](https://arxiv.org/abs/2507.02664)
+- Yang, C., Zhao, Y., Wang, S. (2019). *Deep Image Compression in the Wavelet Transform Domain Based on High Frequency Sub-Band Prediction. IEEE Access.* [10.1109/ACCESS.2019.2911403](https://doi.org/10.1109/ACCESS.2019.2911403)
