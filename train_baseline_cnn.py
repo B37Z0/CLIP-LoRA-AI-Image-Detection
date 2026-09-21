@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from tinygenimage_dataset import TinyGenImageDataset, CrossGeneratorSplit
 from baseline_cnn import DualStreamCNN, build_cnn_transform
-from train import evaluate, train_one_epoch # same logic
+from train_cliploracnn import evaluate, train_one_epoch # same logic
 
 
 def main():

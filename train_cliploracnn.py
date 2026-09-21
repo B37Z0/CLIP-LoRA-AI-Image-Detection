@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from tinygenimage_dataset import TinyGenImageDataset, CrossGeneratorSplit, build_clip_transform
-from model import CLIPLoRADetector
+from model_cliploracnn import CLIPLoRADetector
 
 
 def evaluate(model, loader, device):
@@ -44,7 +44,6 @@ def evaluate(model, loader, device):
 def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
     total_loss = 0.0
-    has_null_projection = hasattr(model, "project_lora_null_space")
 
     for pixel_values, labels, _ in loader:
         pixel_values = pixel_values.to(device)
@@ -56,9 +55,6 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
             loss = criterion(logits, labels)
         loss.backward()
         optimizer.step()
-
-        if has_null_projection:
-            model.project_lora_null_space()
 
         total_loss += loss.item()
 
@@ -74,18 +70,11 @@ def main():
     batch_size = 16
     # LoRA on a frozen backbone converges FAST. Raise only if
     # train/eval curves are underfitting.
-    epochs = 5
+    epochs = 6
     use_lora = True # False for frozen linear-probe baseline (Ohja et al. 2023)
-    use_freq_branch = True # fuse the YCbCr DFT+DWT frequency branch into the CLIP model
-    null_space = True # LoRA-Null: constrain adaptation away from the frozen weight's top singular directions
-    checkpoint_path = (
-        f"checkpoint_lora{'_null' if null_space else ''}{'_freq' if use_freq_branch else ''}.pt"
-        if use_lora else "checkpoint_frozen.pt"
-    )
-    checkpoint_dir = (
-        f"checkpoints_lora{'_null' if null_space else ''}{'_freq' if use_freq_branch else ''}"
-        if use_lora else "checkpoints_frozen"
-    )
+    use_freq_branch = True # fuse YCbCr DFT+DWT frequency branch into the CLIP model
+    checkpoint_path = f"checkpoint_lora_{'freq' if use_freq_branch else 'lora'}.pt" if use_lora else "checkpoint_frozen.pt"
+    checkpoint_dir = f"checkpoints_lora_{'freq' if use_freq_branch else 'lora'}" if use_lora else "checkpoints_frozen"
     os.makedirs(checkpoint_dir, exist_ok=True)
     resume = False # True to resume from previous checkpoint
 
@@ -97,7 +86,7 @@ def main():
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    model = CLIPLoRADetector(use_lora=use_lora, use_freq_branch=use_freq_branch, null_space=null_space).to(device)
+    model = CLIPLoRADetector(use_lora=use_lora, use_freq_branch=use_freq_branch).to(device)
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=1e-4)
     criterion = nn.CrossEntropyLoss()
