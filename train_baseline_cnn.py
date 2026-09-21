@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from tinygenimage_dataset import TinyGenImageDataset, CrossGeneratorSplit
 from baseline_cnn import DualStreamCNN, build_cnn_transform
-from train_cliploracnn import evaluate, train_one_epoch # same logic
+from junk.train_cliploracnn import evaluate, train_one_epoch # same logic
 
 
 def main():
@@ -66,16 +66,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-"""
-Epoch 5/5 - train loss: 0.0688
-  Real: 0.981
-  Midjourney: 0.318
-  VQDM: 0.287
- - Balanced acc (Real vs Midjourney): 0.649
- - Balanced acc (Real vs VQDM): 0.634
- - Mean balanced acc: 0.642
- - New best - saved checkpoint_cnn_baseline.pt
-
-Best mean balanced acc: 0.642 (checkpoint: checkpoint_cnn_baseline.pt)
-"""

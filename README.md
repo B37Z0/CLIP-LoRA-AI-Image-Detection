@@ -35,11 +35,11 @@ Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by c
 | Configuration | Mean Balanced Acc | Midjourney Balanced Acc | VQDM Balanced Acc |
 |---|---|---|---|
 | Dual-stream CNN (baseline) | 0.642 | 0.649 | 0.634 |
-| Frozen CLIP linear probe | 0.853 | 0.846 | 0.867 |
-| CLIP + LoRA (r=8) | 0.835–0.843* | 0.72–0.75* | 0.87–0.95* |
-| CLIP + LoRA + frequency branch | 0.835–0.843* | 0.66–0.73* | 0.87–0.95* |
-| **CLIP + LoRA-Null (r=8)** | **0.857** | 0.75 | 0.964 |
-| CLIP + LoRA-Null + frequency branch | *pending* | *pending* | *pending* |
+| Frozen CLIP linear probe | 0.853 | 0.844 | 0.863 |
+| CLIP + LoRA (r=8) | 0.843* | 0.72–0.75* | 0.87–0.95* |
+| CLIP + LoRA + frequency branch | 0.835* | 0.66–0.73* | 0.87–0.96* |
+| CLIP + LoRA-Null (r=8) | 0.857 | 0.75 | 0.964 |
+| **CLIP + LoRA-Null + frequency branch** | **0.858** | **0.770** | 0.946 |
 
 *Plain-LoRA and LoRA+frequency results vary noticeably across epochs/runs - see [Findings](#findings) below.
 
@@ -48,7 +48,7 @@ Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by c
 - **CLIP-based approaches dramatically outperform training a detector from scratch.** Every single CLIP configuration easily beats the dual-stream CNN baseline by 20+ points of balanced accuracy, readily confirming the literature's claim for this specific generalization-focused evaluation.
 - **Naive LoRA adaptation rapidly overfits to training-generator-specific artifacts.** Across every run, training loss collapses toward zero within 2–3 epochs while held-out Midjourney accuracy degrades or becomes noisy. These are classic signs of the model overfitting to narrow, generator-specific shortcuts rather than learning generalizable representations. Standard regularization (LoRA dropout, lower rank) did not fix this to any notable degree.
 - **LoRA-Null (SVD-based null-space projection) measurably helps.** Implementing LoRA-Null achieved a clean and reproducible result (0.857) with more stable early-training generalization than the basic LoRA variant. The overfitting problem was not solved - overfitting returned after epoch 2-3 - likely because constraining ~32 of 1024 weight dimensions still leaves the rank-8 update plenty of room to memorize elsewhere.
-- **The frequency branch did not improve generalization in any tested combination.** Plausibly, the frequency branch is randomly initialized and needs time to learn useful filters, but the adapted backbone overfits far too quickly before any productive learning can occur. This is a negative result and worth investigating further.
+- **The frequency branch has a negative or marginal effect.** Adding the frequency branch to the LoRA-Null variant improved Midjourney balanced accuracy by +2 points (0.751 -> 0.770) while slightly hurting VQDM (0.964 -> 0.946), resulting in essentially the same mean balanced accuracy (0.858 vs 0.857). Under plain LoRA (without null-space projection), the frequency branch showed no benefit at all. This suggests the frequency features may only contribute meaningfully when the backbone's adaptation is constrained enough to not overfit before the randomly-initialized frequency CNN can learn useful filters.
 - **Generalization difficulty is very much generator-dependent, not uniform.** Midjourney is consistently and easily the hardest of the held-out generators across every architecture and configuration tried (accuracy regularly stuck in the 0.3–0.55 range), while VQDM generalizes well and improves steadily under adaptation until it begins overfitting. This is consistent with literature suggesting closed-source commercial generators (Midjourney, DALL·E) leave different or weaker artifacts than open research diffusion models, making them harder universal detection targets.
 
 ## Limitations & Next Steps
@@ -70,7 +70,10 @@ train_baseline_cnn.py     # Training loop for the dual-stream CNN baseline
 
 ## References
 
-- Ojha, U., Li, Y., & Lee, Y. J. (2023). *Towards Universal Fake Image Detectors that Generalize Across Generative Models.*
-- Mahara, A., & Rishe, N. (2025). *Methods and Trends in Detecting AI-Generated Images: A Comprehensive Review.*
-- Yousaf, B., Usama, M., Sultani, W., Mahmood, A., & Qadir, J. (2022). *Fake Visual Content Detection Using Two-Stream Convolutional Neural Networks.*
-- Zhu, M. et al. (2024). *GenImage: A Million-Scale Benchmark for Detecting AI-Generated Images.*
+- Ojha, U., Li, Y., & Lee, Y. J. (2023). *Towards Universal Fake Image Detectors that Generalize Across Generative Models.* [arXiv:2302.10174](https://arxiv.org/abs/2302.10174)
+- Mahara, A., & Rishe, N. (2025). *Methods and Trends in Detecting AI-Generated Images: A Comprehensive Review.* [arXiv:2502.15176](https://arxiv.org/abs/2502.15176)
+- Yousaf, B., Usama, M., Sultani, W., Mahmood, A., & Qadir, J. (2022). *Fake Visual Content Detection Using Two-Stream Convolutional Neural Networks.* [arXiv:2101.00676](https://arxiv.org/abs/2101.00676)
+- Zhu, M. et al. (2024). *GenImage: A Million-Scale Benchmark for Detecting AI-Generated Images.* [arXiv:2306.08571](https://arxiv.org/abs/2306.08571)
+- Hu, E. J. et al. (2021). *LoRA: Low-Rank Adaptation of Large Language Models.* [arXiv:2106.09685](https://arxiv.org/abs/2106.09685)
+- Wang, G. et al. (2025). *LoRA-Null: Zero-Cost Adapting CLIP for Few-Shot Image Classification.* [arXiv:2503.02659](https://arxiv.org/abs/2503.02659)
+- Ma, Z. et al. (2025). *AIGI Holmes: A Multi-Branch Pipeline for Reliable AI-Generated Image Detection.* [arXiv:2507.02664](https://arxiv.org/abs/2507.02664)

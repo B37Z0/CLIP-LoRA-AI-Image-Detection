@@ -74,7 +74,7 @@ def main():
     batch_size = 16
     # LoRA on a frozen backbone converges FAST. Raise only if
     # train/eval curves are underfitting.
-    epochs = 6
+    epochs = 8
     use_lora = True # False for frozen linear-probe baseline (Ohja et al. 2023)
     use_freq_branch = True # True to fuse the YCbCr DFT+DWT frequency branch into the CLIP model
     null_space = True # True for LoRA-Null
