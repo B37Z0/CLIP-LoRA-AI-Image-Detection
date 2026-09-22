@@ -75,11 +75,11 @@ def main():
     batch_size = 16
     # LoRA on a frozen backbone converges FAST. 
     # Raise only if curves show underfitting.
-    epochs = 5
+    epochs = 7
     use_lora = True # False for frozen linear-probe baseline
-    use_freq_branch = True # fuse the YCbCr DFT+DWT frequency branch into the classifier
+    use_freq_branch = False # fuse the YCbCr DFT+DWT frequency branch into the classifier
     null_space_init = True # LoRA-Null: activation-based null-space init of B, A
-    null_space_grad_protect = True # LoRA-Null ablation: project A gradient during training
+    null_space_grad_protect = True # LoRA-Null ablation (null_space_init=True): project A gradient during training
     checkpoint_path = (
         f"checkpoint_lora{'_null' if null_space_init else ''}"
         f"{'_gradprotect' if null_space_grad_protect else ''}"
@@ -87,7 +87,7 @@ def main():
         if use_lora else "checkpoint_frozen.pt"
     )
     checkpoint_dir = (
-        f"checkpoint_lora{'_null' if null_space_init else ''}"
+        f"checkpoints_lora{'_null' if null_space_init else ''}"
         f"{'_gradprotect' if null_space_grad_protect else ''}"
         f"{'_freq' if use_freq_branch else ''}"
         if use_lora else "checkpoint_frozen"
