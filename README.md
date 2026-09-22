@@ -42,7 +42,7 @@ Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by c
 | CLIP + LoRA-Null (r=8) | 0.878 | 0.794 | 0.961 |
 | CLIP + LoRA-Null + frequency branch | - | - | - |
 | **CLIP + LoRA-Null + grad-protect** | **0.913** | **0.848** | **0.977** |
-| CLIP + LoRA-Null + grad-protect +frequency branch | - | - | - |
+| CLIP + LoRA-Null + grad-protect + frequency branch | - | - | - |
  
 *Plain-LoRA and LoRA+frequency results vary noticeably across epochs/runs - see [Findings](#findings) below.
 
