@@ -21,9 +21,10 @@ The task is simple binary classification: real images vs. AI-generated images. T
 | **Dual-stream CNN** (`baseline_cnn.py`) | Semi-reproduction baseline (Yousaf et al. 2022 pattern): ResNet18 spatial stream + a frequency stream (YCbCr conversion -> per-channel DFT real/imaginary + single-level Haar DWT, each through a separate small CNN), then fused via concatenation. |
 | **Frozen CLIP linear probe** (`model.py`) | Ojha et al. 2023 baseline: frozen CLIP ViT-L/14 backbone, single linear classification head. No finetuning/adaptation. |
 | **CLIP + LoRA** (`model.py`) | CLIP ViT-L/14 with LoRA adapters on attention `q_proj`/`v_proj` layers, via `transformers.CLIPVisionModelWithProjection` + `peft`. |
-| **CLIP + LoRA-Null** (`model.py`) | LoRA with an added constraint: after every optimizer step, each adapter's `A` matrix is projected to be orthogonal to the frozen weight's top-32 singular directions (computed via SVD), preventing adaptation from messing with the input-side features that the pretrained weights rely on most for generalization. |
-| **+ Frequency branch** (ablation on any CLIP variant) | Fuses the same YCbCr DFT+DWT frequency branch from the CNN baseline into the CLIP model's classifier head, testing whether frequency information adds anything on top of CLIP's semantic features (drawing a parallel to the dual-stream CNN, CLIP image processing is fundamentally rooted in the spatial domain). |
-
+| **CLIP + LoRA-Null** (`model.py`) | Full reproduction (Tang et al. 2025) of LoRA-Null initialization: for each adapted layer, pretrained activations are captured on the frozen backbone, SVD'd to find their null space, and the frozen weight `W0` is projected onto that null space; a second SVD of that projection jointly initializes `A` and`B`, with the frozen residual adjusted to `W0' = W0 - scaling*(B@A)` so the model output at initialization still matches the untouched pretrained backbone (verified directly - see [Findings](#findings)). |
+| **+ grad-protect** (ablation on LoRA-Null) | Personal extension, not part of published methods: on top of LoRA-Null's init, `A`'s gradient is projected to zero out its component along the top-k most-used activation directions before every optimizer step. Where LoRA-Null only constrains *initialization* of `A` and `B`, this keeps `A` constrained to the null space *throughout* training. |
+| **+ Frequency branch** (ablation on CLIP) | Fuses the same YCbCr DFT+DWT frequency branch from the CNN baseline into the CLIP model's classifier head, testing whether frequency information adds anything on top of CLIP's semantic features (drawing a parallel to the dual-stream CNN, CLIP image processing is fundamentally rooted in the spatial domain). |
+ 
 A few implementation notes:
 - LoRA is built on `transformers.CLIPVisionModelWithProjection`, not `open_clip` - `open_clip`'s ViT uses `torch.nn.MultiheadAttention`, which reads its `out_proj` weight directly for a fused functional call, rather than invoking it as a normal forward pass (silently and entirely bypassing LoRA's hook).
 - The dual-stream CNN baseline is a *largely simplified* reproduction of Yousaf et al.: DFT and DWT features are processed by separate small CNNs rather than stacked into one 18-channel input to a single ResNet-50, and streams are fused via feature concatenation rather than the paper's probability-averaging. Future improvements are planned.
@@ -31,38 +32,42 @@ A few implementation notes:
 ## Results
 
 Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by configuration:
-
+ 
 | Configuration | Mean Balanced Acc | Midjourney Balanced Acc | VQDM Balanced Acc |
 |---|---|---|---|
 | Dual-stream CNN (baseline) | 0.642 | 0.649 | 0.634 |
-| Frozen CLIP linear probe | 0.853 | **0.844** | 0.863 |
+| Frozen CLIP linear probe | 0.853 | **0.732** | 0.759 |
 | CLIP + LoRA (r=8) | 0.843* | 0.750* | 0.936* |
 | CLIP + LoRA + frequency branch | 0.835* | 0.732* | 0.937* |
-| CLIP + LoRA-Null (r=8) | 0.857 | 0.751 | **0.964** |
-| **CLIP + LoRA-Null + frequency branch** | **0.858** | 0.770 | 0.946 |
-
+| CLIP + LoRA-Null (r=8) | 0.878 | 0.589 | 0.923 |
+| CLIP + LoRA-Null + frequency branch | - | - | - |
+| **CLIP + LoRA-Null + grad-protect** | **0.913** | 0.701 | **0.959** |
+| CLIP + LoRA-Null + grad-protect +frequency branch | - | - | - |
+ 
 *Plain-LoRA and LoRA+frequency results vary noticeably across epochs/runs - see [Findings](#findings) below.
 
 ## Findings
 
 - **CLIP-based approaches dramatically outperform training a detector from scratch.** Every single CLIP configuration easily beats the dual-stream CNN baseline by 20+ points of balanced accuracy, readily confirming the literature's claim for this specific generalization-focused evaluation.
 - **Naive LoRA adaptation rapidly overfits to training-generator-specific artifacts.** Across every run, training loss collapses toward zero within 2–3 epochs while held-out Midjourney accuracy degrades or becomes noisy. These are classic signs of the model overfitting to narrow, generator-specific shortcuts rather than learning generalizable representations. Standard regularization (LoRA dropout, lower rank) did not fix this to any notable degree.
-- **LoRA-Null (SVD-based null-space projection) measurably helps.** Implementing LoRA-Null achieved a clean and reproducible result (0.857) with more stable early-training generalization than the basic LoRA variant. The overfitting problem was not solved - overfitting returned after epoch 2-3 - likely because constraining ~32 of 1024 weight dimensions still leaves the rank-8 update plenty of room to memorize elsewhere.
-- **The frequency branch's effect varies between configurations.** Adding the frequency branch to the LoRA-Null variant improved Midjourney balanced accuracy by +2 points (0.751 -> 0.770) while hurting VQDM about the same (0.964 -> 0.946) - resulting in essentially the same mean balanced accuracy (0.858 vs 0.857) - rather than a uniform improvement. Under plain LoRA (without null-space projection), the frequency branch effects were more negative than not. An interpretation of these effects is that the frequency features may only contribute meaningfully when the backbone's adaptation is constrained enough to not overfit before the randomly-initialized frequency CNN can learn useful filters.
-- **Generalization difficulty is very much generator-dependent, not uniform.** Midjourney is consistently and easily the hardest of the held-out generators across every architecture and configuration tried (accuracy regularly stuck in the 0.3–0.55 range), while VQDM generalizes well and improves steadily under adaptation until it begins overfitting. This is consistent with literature suggesting closed-source commercial generators (Midjourney, DALL·E) leave different or weaker artifacts than open research diffusion models, making them harder universal detection targets.
+- **The LoRA-Null init helps mean accuracy, but doesn't close the Midjourney gap to the frozen probe.** LoRA-Null (0.878 mean) beats the frozen probe (0.853 mean) overall, but almost entirely via the large VQDM gain (0.759 -> 0.923); on Midjourney specifically - the harder held-out generator - the frozen probe still generalizes clearly better (0.732 -> 0.589). Midjourney accuracy under LoRA-Null is also unstable across epochs (oscillating in the 0.40-0.59 range) rather than improving smoothly, unlike the frozen probe's steady increase. Constraining the LoRA *initialization* to the null space is not, by itself, enough to match frozen-feature generalization on the hardest case.
+- **Continuously constraining training (grad-protect), not just initialization, significantly improves generalization.** Projecting `A`'s gradient to stay orthogonal to the top-k most-used activation directions at every step - not just at init - raised Midjourney balanced accuracy from 0.589 to 0.701 (within 3 points of the frozen probe), while also achieving the best VQDM (0.959) and best mean balanced accuracy (0.913) of any configuration tested *by far*. This is an extension beyond the published LoRA-Null method, and the result suggests the initialization-only method used is only a floor for this generalization-focused task. Continuing to protect the subspace during training resulting in significantly improved generalization; however, the rapid overfitting pattern is still present (Midjourney accuracy peaks at epoch 2, then degrades consistently). 
+- **The frequency branch's effect varies between configurations.** Adding the frequency branch to plain LoRA (without null-space projection) as well as various test configurations resulted in only marginal improvements or degradations in performance. An interpretation of these effects is that the frequency features may only contribute meaningfully when the backbone's adaptation is constrained enough to not overfit before the randomly-initialized frequency CNN can learn useful filters.
+- **Generalization difficulty is very much generator-dependent, not uniform.** Midjourney is consistently and easily the hardest of the held-out generators across every architecture and configuration tried, while VQDM generalizes well and improves steadily under adaptation until it begins overfitting. This is consistent with literature suggesting closed-source commercial generators (Midjourney, DALL·E) leave different or weaker artifacts than open research diffusion models, making them harder universal detection targets.
 
 ## Limitations & Next Steps
 
 - **Dataset scale.** Tiny-GenImage provides only ~1,750–2,000 fake images per generator. The full GenImage dataset (tens of thousands of images per generator) is the natural next step up - it's plausible the overfitting/generalization gap observed so far is partly due to data-scarcity rather than a purely architectural issue.
-- **Frequency branch investigation.** Current results are a negative finding and far from settled. It is worth testing whether pretraining the frequency branch separately, or applying a distinct learning rate may change the outcome.
-- **LoRA-Null tuning.** The top-k=32 protected-subspace size was a starting guess and not tuned. A wider protected subspace, or applying the constraint to additional layers, may extend the generalization benefit further into training.
-- **Formal LoRA-Null ablation.** Comparing against a matched-capacity unconstrained LoRA configuration at the same effective rank would reinforce that the null-space constraint, not just training dynamics, led to the improvement.
+- **Frequency branch ablations on LoRA-Null variants.** Further combining the ablations to verify the full potential of the frequency branch is needed. The possibility of independently pretraining the frequency branch or applying a distinct learning rate may also be investigated.
+- **grad-protect's overfitting dynamic.** grad-protect raises peak Midjourney generalization but still degrades after epoch 2-3. Worth testing whether a wider protected subspace (`protect_k`), applying the projection to additional layers, or a lower learning rate late in training extends the improved-generalization window further.
+- **Matched-capacity ablation.** Comparing LoRA-Null/grad-protect against unconstrained LoRA at the same effective rank more rigorously would isolate how much of the gain is the null-space constraint itself versus general training-dynamics differences (e.g. different effective learning rate from the altered initialization).
+
 
 ## Repository Contents
 
 ```
 tinygenimage_dataset.py   # Tiny-GenImage loading + cross-generator train/test split
-model.py                  # CLIP-ViT detector: frozen probe / LoRA / LoRA-Null / +frequency branch
+model.py                  # CLIP-ViT detector: frozen probe / LoRA / LoRA-Null / grad-protect / +frequency branch
 train.py                  # Training loop for CLIP-based models, with per-generator + balanced-acc evaluation
 baseline_cnn.py           # Dual-stream CNN baseline (ResNet18 + DFT/DWT frequency branch)
 train_baseline_cnn.py     # Training loop for the dual-stream CNN baseline
@@ -75,6 +80,6 @@ train_baseline_cnn.py     # Training loop for the dual-stream CNN baseline
 - Yousaf, B., Usama, M., Sultani, W., Mahmood, A., & Qadir, J. (2022). *Fake Visual Content Detection Using Two-Stream Convolutional Neural Networks.* [arXiv:2101.00676](https://arxiv.org/abs/2101.00676)
 - Zhu, M. et al. (2024). *GenImage: A Million-Scale Benchmark for Detecting AI-Generated Images.* [arXiv:2306.08571](https://arxiv.org/abs/2306.08571)
 - Hu, E. J. et al. (2021). *LoRA: Low-Rank Adaptation of Large Language Models.* [arXiv:2106.09685](https://arxiv.org/abs/2106.09685)
-- Wang, G. et al. (2025). *LoRA-Null: Zero-Cost Adapting CLIP for Few-Shot Image Classification.* [arXiv:2503.02659](https://arxiv.org/abs/2503.02659)
+- Tang, P., Hu, X., Liu, Y., Ding, L., Zhang, D., Wu, X., & Zhang, D. (2025). *Put the Space of LoRA Initialization to the Extreme to Preserve Pre-trained Knowledge.* AAAI 2026. [arXiv:2503.02659](https://arxiv.org/abs/2503.02659)
 - Ma, Z. et al. (2025). *AIGI Holmes: A Multi-Branch Pipeline for Reliable AI-Generated Image Detection.* [arXiv:2507.02664](https://arxiv.org/abs/2507.02664)
 - Yang, C., Zhao, Y., Wang, S. (2019). *Deep Image Compression in the Wavelet Transform Domain Based on High Frequency Sub-Band Prediction. IEEE Access.* [10.1109/ACCESS.2019.2911403](https://doi.org/10.1109/ACCESS.2019.2911403)
