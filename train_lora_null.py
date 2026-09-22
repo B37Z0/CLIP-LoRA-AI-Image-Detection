@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from tinygenimage_dataset import TinyGenImageDataset, CrossGeneratorSplit, build_clip_transform
-from model import CLIPLoRADetector, sample_calibration_batch
+from model_lora_null import CLIPLoRADetector
 
 
 def evaluate(model, loader, device):
@@ -44,7 +44,7 @@ def evaluate(model, loader, device):
 def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
     total_loss = 0.0
-    has_grad_projection = hasattr(model, "project_lora_null_space_gradient")
+    has_null_projection = hasattr(model, "project_lora_null_space")
 
     for pixel_values, labels, _ in loader:
         pixel_values = pixel_values.to(device)
@@ -55,11 +55,10 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
             logits = model(pixel_values)
             loss = criterion(logits, labels)
         loss.backward()
-
-        if has_grad_projection:
-            model.project_lora_null_space_gradient()
-
         optimizer.step()
+
+        if has_null_projection:
+            model.project_lora_null_space()
 
         total_loss += loss.item()
 
@@ -70,27 +69,22 @@ def main():
     torch.manual_seed(0)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     held_out = ["Midjourney", "VQDM"]
-    # N=16 comfortably below the measured ~4.85GB/batch-8.
-    # Raise N for more throughput but be careful.
+    # N=16 is comfortably below the measured ~4.85GB/batch-8.
+    # Raise N for more throughput, but be careful not to blow up the GPU.
     batch_size = 16
-    # LoRA on a frozen backbone converges FAST. 
-    # Raise only if curves show underfitting.
-    epochs = 5
-    use_lora = True # False for frozen linear-probe baseline
-    use_freq_branch = True # fuse the YCbCr DFT+DWT frequency branch into the classifier
-    null_space_init = True # LoRA-Null: activation-based null-space init of B, A
-    null_space_grad_protect = True # LoRA-Null ablation: project A gradient during training
+    # LoRA on a frozen backbone converges FAST. Raise only if
+    # train/eval curves are underfitting.
+    epochs = 8
+    use_lora = True # False for frozen linear-probe baseline (Ohja et al. 2023)
+    use_freq_branch = True # True to fuse the YCbCr DFT+DWT frequency branch into the CLIP model
+    null_space = True # True for LoRA-Null
     checkpoint_path = (
-        f"checkpoint_lora{'_null' if null_space_init else ''}"
-        f"{'_gradprotect' if null_space_grad_protect else ''}"
-        f"{'_freq' if use_freq_branch else ''}.pt"
+        f"checkpoint_lora{'_null' if null_space else ''}{'_freq' if use_freq_branch else ''}.pt"
         if use_lora else "checkpoint_frozen.pt"
     )
     checkpoint_dir = (
-        f"checkpoint_lora{'_null' if null_space_init else ''}"
-        f"{'_gradprotect' if null_space_grad_protect else ''}"
-        f"{'_freq' if use_freq_branch else ''}"
-        if use_lora else "checkpoint_frozen"
+        f"checkpoints_lora{'_null' if null_space else ''}{'_freq' if use_freq_branch else ''}"
+        if use_lora else "checkpoints_frozen"
     )
     os.makedirs(checkpoint_dir, exist_ok=True)
     resume = False # True to resume from previous checkpoint
@@ -103,15 +97,7 @@ def main():
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    calibration = None
-    if null_space_init or null_space_grad_protect:
-        calibration = sample_calibration_batch(full_train, n=64, device=device)
-
-    model = CLIPLoRADetector(
-        use_lora=use_lora, use_freq_branch=use_freq_branch,
-        null_space_init=null_space_init, null_space_grad_protect=null_space_grad_protect,
-        calibration_pixel_values=calibration,
-    ).to(device)
+    model = CLIPLoRADetector(use_lora=use_lora, use_freq_branch=use_freq_branch, null_space=null_space).to(device)
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=1e-4)
     criterion = nn.CrossEntropyLoss()
@@ -139,9 +125,9 @@ def main():
         # per-generator balanced acc = (real-recall + generator fake-recall) / 2
         # The raw group sizes (14000 real vs 2000 per generator) make a pooled number useless.
         
-        # UPDATE: use this number to select the checkpoint. Train loss and even the raw
-        # held-out accuracy improve/decline in frankly unfathomable ways that don't seem 
-        # to track actual generalization (Midjourney drift in prev results)
+        # UPDATED: use this number to select the checkpoint. Train loss and even the raw
+        # held-out accuracy can improve/decline in ways that seemingly don't track
+        # actual generalization (see epoch-by-epoch Midjourney drift in prev results)
         bal_accs = []
         if "Real" in eval_results:
             for gen in held_out:
@@ -161,8 +147,8 @@ def main():
                     "epoch": epoch,
                     "best_mean_bal_acc": best_mean_bal_acc,
                 }, checkpoint_path)
-                print(f" - New best - saved {checkpoint_path}")  
-
+                print(f" - New best - saved {checkpoint_path}")
+        
         # Checkpoint every epoch regardless, can't be too safe
         epoch_ckpt = os.path.join(checkpoint_dir, f"epoch_{epoch}.pt")
         torch.save({
