@@ -75,11 +75,12 @@ train_baseline_cnn.py     # Training loop for the dual-stream CNN baseline
 
 ## References
 
-- Ojha, U., Li, Y., & Lee, Y. J. (2023). *Towards Universal Fake Image Detectors that Generalize Across Generative Models.* [arXiv:2302.10174](https://arxiv.org/abs/2302.10174)
-- Mahara, A., & Rishe, N. (2025). *Methods and Trends in Detecting AI-Generated Images: A Comprehensive Review.* [arXiv:2502.15176](https://arxiv.org/abs/2502.15176)
-- Yousaf, B., Usama, M., Sultani, W., Mahmood, A., & Qadir, J. (2022). *Fake Visual Content Detection Using Two-Stream Convolutional Neural Networks.* [arXiv:2101.00676](https://arxiv.org/abs/2101.00676)
+- Ojha, U. et al. (2023). *Towards Universal Fake Image Detectors that Generalize Across Generative Models.* [arXiv:2302.10174](https://arxiv.org/abs/2302.10174)
+- Mahara, A. & Rishe, N. (2025). *Methods and Trends in Detecting AI-Generated Images: A Comprehensive Review.* [arXiv:2502.15176](https://arxiv.org/abs/2502.15176)
+- Yousaf, B. et al. (2022). *Fake Visual Content Detection Using Two-Stream Convolutional Neural Networks.* [arXiv:2101.00676](https://arxiv.org/abs/2101.00676)
 - Zhu, M. et al. (2024). *GenImage: A Million-Scale Benchmark for Detecting AI-Generated Images.* [arXiv:2306.08571](https://arxiv.org/abs/2306.08571)
 - Hu, E. J. et al. (2021). *LoRA: Low-Rank Adaptation of Large Language Models.* [arXiv:2106.09685](https://arxiv.org/abs/2106.09685)
-- Tang, P., Hu, X., Liu, Y., Ding, L., Zhang, D., Wu, X., & Zhang, D. (2025). *Put the Space of LoRA Initialization to the Extreme to Preserve Pre-trained Knowledge.* AAAI 2026. [arXiv:2503.02659](https://arxiv.org/abs/2503.02659)
+- Tang, P. et al. (2026). *Put the Space of LoRA Initialization to the Extreme to Preserve Pre-trained Knowledge.* AAAI 2026. [arXiv:2503.02659](https://arxiv.org/abs/2503.02659) | [HTML (v1)](https://arxiv.org/html/2503.02659v1)
+- Zhang, Y. et al. (2025). *Null-LoRA: Low-Rank Adaptation on Null Space.* [arXiv:2512.15233](https://arxiv.org/abs/2512.15233)
 - Ma, Z. et al. (2025). *AIGI Holmes: A Multi-Branch Pipeline for Reliable AI-Generated Image Detection.* [arXiv:2507.02664](https://arxiv.org/abs/2507.02664)
-- Yang, C., Zhao, Y., Wang, S. (2019). *Deep Image Compression in the Wavelet Transform Domain Based on High Frequency Sub-Band Prediction. IEEE Access.* [10.1109/ACCESS.2019.2911403](https://doi.org/10.1109/ACCESS.2019.2911403)
+- Yang, C. et al. (2019). *Deep Image Compression in the Wavelet Transform Domain Based on High Frequency Sub-Band Prediction. IEEE Access.* [10.1109/ACCESS.2019.2911403](https://doi.org/10.1109/ACCESS.2019.2911403)
