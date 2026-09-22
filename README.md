@@ -36,12 +36,12 @@ Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by c
 | Configuration | Mean Balanced Acc | Midjourney Balanced Acc | VQDM Balanced Acc |
 |---|---|---|---|
 | Dual-stream CNN (baseline) | 0.642 | 0.649 | 0.634 |
-| Frozen CLIP linear probe | 0.853 | **0.844** | 0.863 |
+| Frozen CLIP linear probe | 0.853 | 0.844 | 0.863 |
 | CLIP + LoRA (r=8) | 0.843* | 0.750* | 0.936* |
 | CLIP + LoRA + frequency branch | 0.835* | 0.732* | 0.937* |
 | CLIP + LoRA-Null (r=8) | 0.878 | 0.794 | 0.961 |
 | CLIP + LoRA-Null + frequency branch | - | - | - |
-| **CLIP + LoRA-Null + grad-protect** | **0.913** | 0.848 | **0.977** |
+| **CLIP + LoRA-Null + grad-protect** | **0.913** | **0.848** | **0.977** |
 | CLIP + LoRA-Null + grad-protect +frequency branch | - | - | - |
  
 *Plain-LoRA and LoRA+frequency results vary noticeably across epochs/runs - see [Findings](#findings) below.
@@ -51,9 +51,9 @@ The raw per-class recall underlying the balanced-accuracy numbers (i.e. real-ima
 | Configuration | Real Recall | Midjourney Recall (raw) | VQDM Recall (raw) |
 |---|---|---|---|
 | Dual-stream CNN (baseline) | 0.981 | 0.318 | 0.287 |
-| Frozen CLIP linear probe | 0.964 | 0.724 | 0.763 |
+| Frozen CLIP linear probe | 0.964 | **0.724** | 0.763 |
 | CLIP + LoRA-Null (r=8) | 0.999 | 0.589 | 0.923 |
-| CLIP + LoRA-Null + grad-protect | 0.995 | 0.701 | 0.959 |
+| CLIP + LoRA-Null + grad-protect | 0.995 | 0.701 | **0.959** |
 
 At the moment raw recall is not reported for naive LoRA configuration given the runs' variability, which makes the raw split of the checkpoints significantly less meaningful on their own.
 
