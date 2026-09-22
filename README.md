@@ -50,11 +50,12 @@ The raw per-class recall underlying the balanced-accuracy numbers (i.e. real-ima
 
 | Configuration | Real Recall | Midjourney Recall (raw) | VQDM Recall (raw) |
 |---|---|---|---|
+| Dual-stream CNN (baseline) | 0.981 | 0.318 | 0.287 |
 | Frozen CLIP linear probe | 0.964 | 0.724 | 0.763 |
 | CLIP + LoRA-Null (r=8) | 0.999 | 0.589 | 0.923 |
 | CLIP + LoRA-Null + grad-protect | 0.995 | 0.701 | 0.959 |
 
-At the moment raw recall is not reported for the dual-stream CNN and naive LoRA configuration given the runs' variability, which makes the raw split of the checkpoints significantly less meaningful on their own.
+At the moment raw recall is not reported for naive LoRA configuration given the runs' variability, which makes the raw split of the checkpoints significantly less meaningful on their own.
 
 ## Findings
 
