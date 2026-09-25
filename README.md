@@ -38,14 +38,12 @@ Best mean balanced accuracy across held-out generators (Midjourney + VQDM), by c
 | Dual-stream CNN (baseline) | 0.642 | 0.649 | 0.634 |
 | Frozen CLIP linear probe | 0.842 | 0.835 | 0.850 |
 | CLIP + LoRA (r=8) | 0.879 | 0.796 | 0.963 |
-| CLIP + LoRA + frequency branch | 0.835* | 0.732* | 0.937* |
+| CLIP + LoRA + frequency branch | 0.835 | 0.732 | 0.937 |
 | CLIP + LoRA-Null (r=8) | 0.878 | 0.794 | 0.961 |
-| CLIP + LoRA-Null + frequency branch | - | - | - |
+| CLIP + LoRA-Null + frequency branch | 0.879 | 0.794 | 0.963 |
 | **CLIP + LoRA-Null + grad-protect** | **0.913** | **0.848** | **0.977** |
-| CLIP + LoRA-Null + grad-protect + frequency branch | - | - | - |
+| CLIP + LoRA-Null + grad-protect + frequency branch | 0.872 | 0.779 | 0.965 |
  
-*LoRA+frequency has not yet been rerun under the same fixed-seed as the other rows and should be treated as a loose range- see [Findings](#findings) below.
-
 The raw per-class recall underlying the balanced-accuracy numbers (i.e. real-image recall, and each held-out generator's raw fake-image recall before averaging with real recall) is reported below as well for reference.
  
 | Configuration | Real Recall | Midjourney Recall (raw) | VQDM Recall (raw) |
@@ -53,28 +51,35 @@ The raw per-class recall underlying the balanced-accuracy numbers (i.e. real-ima
 | Dual-stream CNN (baseline) | 0.981 | 0.318 | 0.287 |
 | Frozen CLIP linear probe | 0.963 | **0.707** | 0.737 |
 | CLIP + LoRA (r=8) | 0.999 | 0.592 | 0.926 |
+| CLIP + LoRA + frequency branch | 1.000 | 0.464 | 0.875 |
 | CLIP + LoRA-Null (r=8) | 0.999 | 0.589 | 0.923 |
-| CLIP + LoRA-Null + frequency branch | - | - | - |
+| CLIP + LoRA-Null + frequency branch | 0.998 | 0.591 | 0.928 |
 | CLIP + LoRA-Null + grad-protect | 0.995 | 0.701 | **0.959** |
-| CLIP + LoRA-Null + grad-protect + frequency branch | - | - | - |
-
-Raw recall is not yet reported for the LoRA+frequency-branch configuration.
+| CLIP + LoRA-Null + grad-protect + frequency branch | 0.996 | 0.562 | 0.935 |
+ 
+Every row in the results table above is from a fixed-seed, best-checkpoint-by-balanced-accuracy run.
 
 ## Findings
 
 - **CLIP-based approaches dramatically outperform training a detector from scratch.** Every single CLIP configuration easily beats the dual-stream CNN baseline by 20+ points of balanced accuracy, readily confirming the literature's claim for this specific generalization-focused evaluation.
+
 - **Naive LoRA adaptation rapidly overfits to training-generator-specific artifacts.** Under a fixed seed and prioritizing the best balanced accuracy, plain LoRA peaks at epoch 2 (mean balanced acc 0.879) and then degrades every epoch after (0.824 -> 0.801 -> 0.829 by epoch 5) while training loss collapses toward zero (0.061 -> 0.0055 -> 0.0026 -> 0.0019 -> 0.0012). Midjourney's raw recall shows the same pattern most sharply: 0.469 -> 0.592 (peak) -> 0.439 -> 0.395 -> 0.430. These are classic signs of the model overfitting to narrow, generator-specific shortcuts rather than learning generalizable representations. Standard regularization (LoRA dropout, lower rank) did not fix this to any notable degree.
+
 - **Matched-capacity comparison: the null-space initialization alone provides no measurable benefit over plain LoRA.** Interestingly, given the same seed and rank (=8) - plain LoRA (0.879) and LoRA-Null (0.878) land within noise of each other, most significantly Midjourney balanced accuracy (0.796 for plain LoRA vs. 0.794 for LoRA-Null). This is an unexpected and someone disappointing result: constraining *where the adapter starts* to the null space of pretrained activations has not, by itself, impacted peak generalization in this study. Only when a similar constraint is enforced *continuously* throughout training (grad-protect, 0.913) does a meaningful gain over LoRA appear - see the next point. 
 
 - **The LoRA-Null init doesn't close the Midjourney gap to the frozen probe, and neither does plain LoRA.** Both LoRA variants beat the frozen probe (0.842 mean) on mean balanced accuracy, but almost entirely via the large VQDM gain (frozen probe raw recall 0.737 vs. ~0.92-0.93 for both LoRA variants); on Midjourney specifically - the harder held-out generator - the frozen probe clearly generalizes better (raw recall 0.707 vs. ~0.59 for both) and maintains a higher recall over epochs. Comparatively, Midjourney's raw recall under either LoRA variant is unstable (oscillating, no clear trend across epochs) rather than improving smoothly until overfitting like the frozen probe. LoRA tuning, null-space initialization or not, does not appear to be sufficient to match frozen-feature generalization on the hardest present case.
+
 - **Continuously constraining training (grad-protect), not just initialization, significantly improves generalization.** Projecting `A`'s gradient to stay orthogonal to the top-k most-used activation directions at every step - not just at init - raised Midjourney's raw recall from 0.589 to 0.701 (within 1 point of the frozen probe), while also achieving the best VQDM raw recall (0.959) and best mean balanced accuracy (0.913) of any configuration tested *by far*. This is an extension beyond the published LoRA-Null method, and the result suggests the initialization-only method used is only a floor for this generalization-focused task. Continuing to protect the subspace during training resulting in significantly improved generalization; however, the rapid overfitting pattern is still present (Midjourney accuracy peaks at epoch 2-3, then degrades consistently). 
-- **The frequency branch's effect varies between configurations.** Adding the frequency branch to plain LoRA (without null-space projection) as well as various test configurations resulted in only marginal improvements or degradations in performance. An interpretation of these effects is that the frequency features may only contribute meaningfully when the backbone's adaptation is constrained enough to not overfit before the randomly-initialized frequency CNN can learn useful filters.
+
+- **The frequency branch is generally a regression - likely because it's being starved of gradient signal and not due to overfitting.** Added to LoRA, the frequency branch is a regression (0.879 -> 0.835 mean balanced acc); added to LoRA-Null it's roughly equal (0.878 -> 0.879); added to grad-protect it's the largest regression of the ablations (0.913 -> 0.872, Midjourney balanced accuracy 0.848 -> 0.779). 
+The working hypothesis up until finishing the first iteration of the ablation grid was that the branch's extra trainable capacity resulted in harsher overfitting. However, the logged training loss is nearly identical with and without the frequency branch at matching epochs (e.g. grad-protect 0.0774 -> 0.0061 vs. grad-protect+freq 0.0783 -> 0.0058); this is inconsistent with the branch meaningfully adding extra capcity. Furthermore, the standalone dual-stream CNN baseline improved epoch-to-epoch to the end - suggesting the architecture itself is not the problem. In the joint configuration, the CLIP branch quickly converges to near-zero loss within 3 epochs, which means theres very little loss remaining for the randomly-initialized frequency branch to learn from. This may be a known failure mode in joint multi-modal training; in *"What Makes Training Multi-modal Classification Networks Hard?"* (Wang, W. et al. (CVPR 2020)) a similar pattern is documented - one modality's fsater convergence starves a slower one, and the joint model underperforms compared to an individual branch. 
+
 - **Generalization difficulty is very much generator-dependent, not uniform.** Midjourney is consistently and easily the hardest of the held-out generators across every architecture and configuration tried, while VQDM generalizes well and improves steadily under adaptation until it begins overfitting. This is consistent with literature suggesting closed-source commercial generators (Midjourney, DALL·E) leave different or weaker artifacts than open research diffusion models, making them harder universal detection targets.
 
 ## Limitations & Next Steps
 
 - **Dataset scale.** Tiny-GenImage provides only ~1,750–2,000 fake images per generator. The full GenImage dataset (tens of thousands of images per generator) is the natural next step up - it's plausible the overfitting/generalization gap observed so far is partly due to data-scarcity rather than a purely architectural issue.
-- **Frequency branch ablations on LoRA-Null variants.** Further combining the ablations to verify the full potential of the frequency branch is needed. The possibility of independently pretraining the frequency branch or applying a distinct learning rate may also be investigated.
+- **Testing the gradient-starvation hypothesis for the frequency branch.** All frequency-branch configurations are measured under the same fixed-seed as other configurations. The current best explanation (see Findings) is that the CLIP branch converges too quickly for the frequency branch to get a useful training signal. Pretraining the frequency branch (or its own linear head) separately before joint fine-tuning, or giving it a distinct/higher learning rate to compete for gradient signal, are natural extensions. 
 - **grad-protect's overfitting dynamic.** grad-protect raises peak Midjourney generalization but still degrades after epoch 2-3. Worth testing whether a wider protected subspace (`protect_k`), applying the projection to additional layers, or a lower learning rate late in training extends the improved-generalization window further.
 - **Matched-capacity ablation - done for a single seed but worth repeating.** Plain LoRA and LoRA-Null's init-only variant were compared *once* at the same rank and seed, given best-epoch-selection; the twolanded within noise of each other. Re-running both across different seeds and hyperparameter configurations would reinforce the result and definitively confirm any true gap.
 
@@ -99,3 +104,4 @@ train_baseline_cnn.py     # Training loop for the dual-stream CNN baseline
 - Zhang, Y. et al. (2025). *Null-LoRA: Low-Rank Adaptation on Null Space.* [arXiv:2512.15233](https://arxiv.org/abs/2512.15233)
 - Ma, Z. et al. (2025). *AIGI Holmes: A Multi-Branch Pipeline for Reliable AI-Generated Image Detection.* [arXiv:2507.02664](https://arxiv.org/abs/2507.02664)
 - Yang, C. et al. (2019). *Deep Image Compression in the Wavelet Transform Domain Based on High Frequency Sub-Band Prediction. IEEE Access.* [10.1109/ACCESS.2019.2911403](https://doi.org/10.1109/ACCESS.2019.2911403)
+- Wang, W., Tran, D., & Feiszli, M. (2020). *What Makes Training Multi-modal Classification Networks Hard?* CVPR. [arXiv:1905.12681](https://arxiv.org/abs/1905.12681)
